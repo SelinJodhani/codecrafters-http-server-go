@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -37,7 +39,12 @@ func (s *HTTPServer) Serve() {
 
 func (s *HTTPServer) readInput(c net.Conn) (string, error) {
 	reader := bufio.NewReader(c)
-	var requestBuffer bytes.Buffer
+
+	var (
+		requestBuffer bytes.Buffer
+		bodyLength    int
+		hasBody       bool
+	)
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -49,6 +56,24 @@ func (s *HTTPServer) readInput(c net.Conn) (string, error) {
 		if line == "\r\n" {
 			break // Empty line indicates end of headers
 		}
+
+		if strings.HasPrefix(line, "Content-Length:") {
+			parts := strings.Fields(line)
+			if len(parts) == 2 {
+				bodyLength, _ = strconv.Atoi(parts[1])
+				hasBody = true
+			}
+		}
+	}
+
+	// Read request body if present
+	if hasBody && bodyLength > 0 {
+		bodyBytes := make([]byte, bodyLength)
+		_, err := io.ReadFull(reader, bodyBytes)
+		if err != nil {
+			return "", err
+		}
+		requestBuffer.Write(bodyBytes)
 	}
 
 	return requestBuffer.String(), nil
@@ -69,45 +94,56 @@ func (s *HTTPServer) HandleConnection(c net.Conn) {
 		return
 	}
 
-	// Check if file exists
-
 	switch {
+
 	case request.Path == "/":
-		SendResponse(c, 200, "")
+		NewResponse().AddStatus(200).Write(c)
+
 	case strings.HasPrefix(request.Path, "/echo"):
 		response := strings.TrimPrefix(request.Path, "/echo/")
-		SendResponse(c, 200, response)
+		NewResponse().AddStatus(200).AddContent(response).Write(c)
+
 	case strings.HasPrefix(request.Path, "/user-agent"):
 		userAgent := request.Headers["User-Agent"]
-		SendResponse(c, 200, userAgent)
+		NewResponse().AddStatus(200).AddContent(userAgent).Write(c)
+
+	case request.Method == "POST" && strings.HasPrefix(request.Path, "/files"):
+		fileName := strings.TrimPrefix(request.Path, "/files/")
+		filePath := filepath.Join(s.directory, fileName)
+
+		err := os.WriteFile(filePath, []byte(request.Body), 0644)
+		if err != nil {
+			fmt.Println("Error saving file:", err)
+			NewResponse().AddStatus(500).Write(c)
+			return
+		}
+
+		NewResponse().AddStatus(201).Write(c)
+
 	case strings.HasPrefix(request.Path, "/files"):
 		fileName := strings.TrimPrefix(request.Path, "/files/")
 		filePath := filepath.Join(s.directory, fileName)
 
 		_, err = os.Stat(filePath)
 		if os.IsNotExist(err) {
-			SendResponse(c, 404, "")
+			NewResponse().AddStatus(404).Write(c)
 			return
 		}
 
 		fileContents, err := os.ReadFile(filePath)
 		if err != nil {
 			fmt.Println("Error reading file:", err)
-			SendResponse(c, 500, "")
+			NewResponse().AddStatus(500).Write(c)
 			return
 		}
 
-		c.Write(
-			[]byte(
-				fmt.Sprintf(
-					"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\n%s\r\n",
-					len(string(fileContents)),
-					string(fileContents),
-				),
-			),
-		)
+		NewResponse().AddStatus(200).
+			AddContentType("application/octet-stream").
+			AddContent(string(fileContents)).
+			Write(c)
+
 	default:
-		SendResponse(c, 404, "")
+		NewResponse().AddStatus(404).Write(c)
 	}
 }
 
