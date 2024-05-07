@@ -1,0 +1,56 @@
+func handleConn(conn net.Conn) {
+	r := bufio.NewReader(conn)
+
+	str, err := r.ReadString('\n')
+	if err != nil {
+		panic(err)
+	}
+
+	line := strings.Split(str, " ")
+	path := line[1]
+
+	if path == "/" {
+		conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+	} else if strings.HasPrefix(path, "/echo") {
+		e := strings.Split(path, "/")
+		randomStr := e[2:]
+		str := strings.Join(randomStr, "/")
+		SendResponse(conn, 200, str)
+	} else if strings.HasPrefix(path, "/user-agent") {
+		for {
+			str, err := r.ReadString('\n')
+			if err != nil {
+				fmt.Println("ERR: ", err)
+				break
+			}
+			if strings.HasPrefix(str, "User-Agent") {
+				agent := strings.Split(str, ":")
+				text := strings.TrimSpace(agent[1])
+				SendResponse(conn, 200, text)
+				break
+			}
+		}
+	} else if strings.HasPrefix(path, "/files") {
+		file := strings.Split(path, "/")
+		fileName := file[2:]
+		filePath := strings.Join(fileName, "/")
+
+		f, err := os.Open(filePath)
+		if err != nil {
+			conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+		}
+
+		buf := bytes.NewBuffer(nil)
+		_, err = io.Copy(buf, f)
+		if err != nil {
+			fmt.Println("ERR: ", err)
+			panic(err)
+		}
+
+		conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"))
+		conn.Write(buf.Bytes())
+		conn.Write([]byte("\r\n"))
+	} else {
+		conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+	}
+}
