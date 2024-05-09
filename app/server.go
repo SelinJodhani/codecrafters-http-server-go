@@ -24,6 +24,7 @@ func (s *HTTPServer) Close() {
 
 func (s *HTTPServer) Serve() {
 	defer s.Close()
+
 	fmt.Println("Server listening on port", s.listener.Addr().(*net.TCPAddr).Port)
 
 	for {
@@ -120,7 +121,7 @@ func (s *HTTPServer) HandleConnection(c net.Conn) {
 
 		NewResponse().AddStatus(201).Write(c)
 
-	case strings.HasPrefix(request.Path, "/files"):
+	case request.Method == "GET" && strings.HasPrefix(request.Path, "/files"):
 		fileName := strings.TrimPrefix(request.Path, "/files/")
 		filePath := filepath.Join(s.directory, fileName)
 
