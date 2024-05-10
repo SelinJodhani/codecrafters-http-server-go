@@ -44,6 +44,8 @@ func (r *Response) Write(conn net.Conn) {
 
 	respStr += ("\r\n" + r.Content + "\r\n")
 
+	fmt.Println(respStr)
+
 	conn.Write(
 		[]byte(respStr),
 	)

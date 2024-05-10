@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"flag"
 	"fmt"
 	"io"
@@ -109,7 +110,29 @@ func (s *HTTPServer) HandleConnection(c net.Conn) {
 
 	case strings.HasPrefix(request.Path, "/echo"):
 		message := strings.TrimPrefix(request.Path, "/echo/")
-		response.AddStatus(200).AddContent(message).Write(c)
+
+		if encoding, ok := response.Headers["Content-Encoding"]; ok && encoding == "gzip" {
+			data := []byte(message)
+
+			var compressed bytes.Buffer
+			gzipWriter := gzip.NewWriter(&compressed)
+
+			_, err := gzipWriter.Write(data)
+			if err != nil {
+				fmt.Println("Error compressing data:", err)
+				return
+			}
+
+			err = gzipWriter.Close()
+			if err != nil {
+				fmt.Println("Error closing gzip writer:", err)
+				return
+			}
+
+			response.AddStatus(200).AddContent(compressed.String()).Write(c)
+		} else {
+			response.AddStatus(200).AddContent(message).Write(c)
+		}
 
 	case strings.HasPrefix(request.Path, "/user-agent"):
 		userAgent := request.Headers["User-Agent"]
