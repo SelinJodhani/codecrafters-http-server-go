@@ -6,12 +6,17 @@ import (
 	"net/http"
 )
 
+var statusCodes = map[int]string{
+	200: "OK",
+	201: "Created",
+	404: "Not Found",
+}
+
 type Response struct {
-	Version       string
-	StatusCode    int
-	ContentType   string
-	ContentLength int
-	Content       string
+	Version    string
+	StatusCode int
+	Headers    map[string]string
+	Content    string
 }
 
 func (r *Response) AddStatus(code int) *Response {
@@ -19,37 +24,39 @@ func (r *Response) AddStatus(code int) *Response {
 	return r
 }
 
-func (r *Response) AddContentType(contentType string) *Response {
-	r.ContentType = contentType
+func (r *Response) AddHeader(key string, value string) *Response {
+	r.Headers[key] = value
 	return r
 }
 
 func (r *Response) AddContent(data string) *Response {
 	r.Content = data
-	r.ContentLength = len(data)
+	r.AddHeader("Content-Length", fmt.Sprint(len(data)))
 	return r
 }
 
 func (r *Response) Write(conn net.Conn) {
+	respStr := fmt.Sprintf("HTTP/1.1 %d %s\r\n", r.StatusCode, statusCodes[r.StatusCode])
+
+	for key, val := range r.Headers {
+		respStr += (key + ": " + val + "\r\n")
+	}
+
+	respStr += ("\r\n" + r.Content + "\r\n")
+
 	conn.Write(
-		[]byte(
-			fmt.Sprintf(
-				"HTTP/1.1 %d OK\r\nContent-Type: %s\r\nContent-Length: %d\r\n\n%s\r\n",
-				r.StatusCode,
-				r.ContentType,
-				r.ContentLength,
-				r.Content,
-			),
-		),
+		[]byte(respStr),
 	)
 }
 
 func NewResponse() *Response {
 	return &Response{
-		Version:       "HTTP/1.1",
-		StatusCode:    http.StatusOK,
-		ContentType:   "text/plain",
-		ContentLength: 0,
-		Content:       "",
+		Version:    "HTTP/1.1",
+		StatusCode: http.StatusOK,
+		Headers: map[string]string{
+			"Content-Type":   "text/plain",
+			"Content-Length": "0",
+		},
+		Content: "",
 	}
 }
