@@ -97,7 +97,8 @@ func (s *HTTPServer) HandleConnection(c net.Conn) {
 
 	response := NewResponse()
 
-	if encoding, ok := request.Headers["Accept-Encoding"]; ok && encoding == "gzip" {
+	if encoding, ok := request.Headers["Accept-Encoding"]; ok &&
+		strings.Contains(encoding, "gzip") {
 		response.AddHeader("Content-Encoding", "gzip")
 	}
 
