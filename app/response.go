@@ -21,19 +21,19 @@ type Response struct {
 	Content    string
 }
 
-func (r *Response) AddStatus(code int) *Response {
+func (r *Response) SetStatusCode(code int) *Response {
 	r.StatusCode = code
 	return r
 }
 
-func (r *Response) AddHeader(key string, value string) *Response {
+func (r *Response) SetHeader(key string, value string) *Response {
 	r.Headers[key] = value
 	return r
 }
 
-func (r *Response) AddContent(data string) *Response {
+func (r *Response) SetBody(body string) *Response {
 	if encoding, ok := r.Headers["Content-Encoding"]; ok && encoding == "gzip" {
-		data := []byte(data)
+		data := []byte(body)
 
 		var compressed bytes.Buffer
 		gzipWriter := gzip.NewWriter(&compressed)
@@ -50,19 +50,15 @@ func (r *Response) AddContent(data string) *Response {
 			return r
 		}
 
-		gzipData := compressed.String()
-
-		r.Content = gzipData
-		r.AddHeader("Content-Length", fmt.Sprint(len(r.Content)))
-		return r
+		body = compressed.String()
 	}
 
-	r.Content = data
-	r.AddHeader("Content-Length", fmt.Sprint(len(r.Content)))
+	r.Content = body
+	r.SetHeader("Content-Length", fmt.Sprint(len(r.Content)))
 	return r
 }
 
-func (r *Response) Write(conn net.Conn) {
+func (r *Response) Send(conn net.Conn) {
 	respStr := fmt.Sprintf("HTTP/1.1 %d %s\r\n", r.StatusCode, statusCodes[r.StatusCode])
 
 	for key, val := range r.Headers {

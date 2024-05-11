@@ -99,21 +99,21 @@ func (s *HTTPServer) HandleConnection(c net.Conn) {
 
 	if encoding, ok := request.Headers["Accept-Encoding"]; ok &&
 		strings.Contains(encoding, "gzip") {
-		response.AddHeader("Content-Encoding", "gzip")
+		response.SetHeader("Content-Encoding", "gzip")
 	}
 
 	switch {
 
 	case request.Path == "/":
-		response.AddStatus(200).Write(c)
+		response.SetStatusCode(200).Send(c)
 
 	case strings.HasPrefix(request.Path, "/echo"):
 		message := strings.TrimPrefix(request.Path, "/echo/")
-		response.AddStatus(200).AddContent(message).Write(c)
+		response.SetStatusCode(200).SetBody(message).Send(c)
 
 	case strings.HasPrefix(request.Path, "/user-agent"):
 		userAgent := request.Headers["User-Agent"]
-		response.AddStatus(200).AddContent(userAgent).Write(c)
+		response.SetStatusCode(200).SetBody(userAgent).Send(c)
 
 	case request.Method == "POST" && strings.HasPrefix(request.Path, "/files"):
 		fileName := strings.TrimPrefix(request.Path, "/files/")
@@ -122,11 +122,11 @@ func (s *HTTPServer) HandleConnection(c net.Conn) {
 		err := os.WriteFile(filePath, []byte(request.Body), 0644)
 		if err != nil {
 			fmt.Println("Error saving file:", err)
-			response.AddStatus(500).Write(c)
+			response.SetStatusCode(500).Send(c)
 			return
 		}
 
-		response.AddStatus(201).Write(c)
+		response.SetStatusCode(201).Send(c)
 
 	case request.Method == "GET" && strings.HasPrefix(request.Path, "/files"):
 		fileName := strings.TrimPrefix(request.Path, "/files/")
@@ -134,24 +134,24 @@ func (s *HTTPServer) HandleConnection(c net.Conn) {
 
 		_, err = os.Stat(filePath)
 		if os.IsNotExist(err) {
-			response.AddStatus(404).Write(c)
+			response.SetStatusCode(404).Send(c)
 			return
 		}
 
 		fileContents, err := os.ReadFile(filePath)
 		if err != nil {
 			fmt.Println("Error reading file:", err)
-			response.AddStatus(500).Write(c)
+			response.SetStatusCode(500).Send(c)
 			return
 		}
 
-		response.AddStatus(200).
-			AddHeader("Content-Type", "application/octet-stream").
-			AddContent(string(fileContents)).
-			Write(c)
+		response.SetStatusCode(200).
+			SetHeader("Content-Type", "application/octet-stream").
+			SetBody(string(fileContents)).
+			Send(c)
 
 	default:
-		response.AddStatus(404).Write(c)
+		response.SetStatusCode(404).Send(c)
 	}
 }
 
