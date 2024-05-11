@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"net"
 	"net/http"
@@ -30,8 +32,33 @@ func (r *Response) AddHeader(key string, value string) *Response {
 }
 
 func (r *Response) AddContent(data string) *Response {
+	if encoding, ok := r.Headers["Content-Encoding"]; ok && encoding == "gzip" {
+		data := []byte(data)
+
+		var compressed bytes.Buffer
+		gzipWriter := gzip.NewWriter(&compressed)
+
+		_, err := gzipWriter.Write(data)
+		if err != nil {
+			fmt.Println("Error compressing data:", err)
+			return r
+		}
+
+		err = gzipWriter.Close()
+		if err != nil {
+			fmt.Println("Error closing gzip writer:", err)
+			return r
+		}
+
+		gzipData := compressed.String()
+
+		r.Content = gzipData
+		r.AddHeader("Content-Length", fmt.Sprint(len(r.Content)))
+		return r
+	}
+
 	r.Content = data
-	r.AddHeader("Content-Length", fmt.Sprint(len(data)))
+	r.AddHeader("Content-Length", fmt.Sprint(len(r.Content)))
 	return r
 }
 
